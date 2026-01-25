@@ -27,3 +27,22 @@ Thumbs.db
 
 # Docker
 *.pid
+
+# Environment / Secrets
+.env
+.flaskenv
+*.secret
+
+# Databases (Common in labs)
+*.db
+*.sqlite3
+
+# Infrastructure / Tools
+.terraform/
+.vagrant/
+dist/
+build/
+
+# Integrated Development Environment (IDE)
+.vscode/
+.idea/
