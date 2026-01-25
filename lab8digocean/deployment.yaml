@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab8digo
+  labels:
+    app: lab8digo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lab8digo
+  template:
+    metadata:
+      labels:
+        app: lab8digo
+    spec:
+      containers:
+      - name: lab8digo
+        image: registry.digitalocean.com/lab8v2/lab8app:11.7.25.1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+      imagePullSecrets:
+      - name: regcred
