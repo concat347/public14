@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grocery-app-deployment
+  namespace: grocery-app       # Your custom namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grocery-app
+  template:
+    metadata:
+      labels:
+        app: grocery-app
+    spec:
+      containers:
+      - name: grocery-app
+        image: registry.digitalocean.com/concat347/grocery-app:v1
+        ports:
+        - containerPort: 5000
+        env:
+        - name: REDIS_HOST
+          value: "redis-service"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+  namespace: grocery-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:alpine
+        ports:
+        - containerPort: 6379
