@@ -1,4 +1,0 @@
-Flask==3.0.0        # Latest stable Flask
-Flask-CORS==6.0.1    # Compatible with Flask 3.x
-Werkzeug==3.0.0      # Required for Flask 3.x
-Gunicorn==20.1.0
