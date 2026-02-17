@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grocery-app-deployment
-  namespace: grocery-app       # Your custom namespace
+  namespace: grocery-app
 spec:
   replicas: 1
   selector:

@@ -2,14 +2,14 @@ apiVersion: v1
 kind: Service
 metadata:
   name: grocery-service
-  namespace: grocery-app       # Your custom namespace
+  namespace: grocery-app
 spec:
   type: LoadBalancer
   ports:
   - port: 80         
     targetPort: 5000 
   selector:
-    app: grocery-app           # Matches the label in your deployment
+    app: grocery-app
 ---
 apiVersion: v1
 kind: Service

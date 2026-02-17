@@ -7,7 +7,7 @@ import os
 app = Flask(__name__)
 
 # Connect to Redis. 
-# We use os.getenv so it works on WSL2 now AND Kubernetes later!
+# Use os.getenv so it works on WSL2 now AND Kubernetes
 redis_host = os.getenv("REDIS_HOST", "localhost")
 db = redis.Redis(host=redis_host, port=6379, decode_responses=True)
 
@@ -45,5 +45,5 @@ def delete_item(item_id):
     return jsonify({"error": "Item not found"}), 404
 
 if __name__ == "__main__":
-    # 0.0.0.0 makes the app accessible to your Windows browser too!
+    # 0.0.0.0 makes the app accessible to Windows browser
     app.run(debug=True, host='0.0.0.0', port=5000)
