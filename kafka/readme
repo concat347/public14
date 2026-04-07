@@ -1,0 +1,237 @@
+# Kafka Finance Streaming Lab
+
+## Overview
+
+This lab demonstrates a real-time data pipeline using Apache Kafka. A producer streams stock market data, and a consumer processes and visualizes it in a live dashboard.
+
+---
+
+## Architecture
+
+* **Producer**: Fetches stock data using `yfinance` and sends it to Kafka topics
+* **Kafka Broker**: Handles message distribution
+* **Consumer**: Subscribes to one or more topics and processes incoming data
+* **Dashboard**: Built with Streamlit to visualize stock data in real time
+
+---
+
+## Key Features
+
+* JSON-based message structure (open, high, low, close, volume)
+* Support for multiple stock tickers (multiple Kafka topics)
+* Two producer modes:
+
+  * **Development mode**: Sends historical data
+  * **Real-time mode**: Streams live data at 1-minute intervals
+* Live visualization using Streamlit
+
+---
+
+## Key Lessons Learned
+
+### 1. Kafka Producer/Consumer Model
+
+* Producers send messages to topics
+* Consumers subscribe to topics and read messages independently
+* Multiple consumers can read the same data using different consumer groups
+
+### 2. Message Structure Matters
+
+* Structured JSON enables flexible and scalable data processing
+* Consistent schemas simplify consumer logic
+
+### 3. Streaming vs Batch Processing
+
+* Development mode simulates streaming using historical data
+* Real-time mode continuously produces new data
+
+### 4. Handling External Data (yfinance)
+
+* Data may include NaN values and inconsistent formats
+* MultiIndex columns require normalization before use
+
+### 5. Scalability Concepts
+
+* Multiple producers and consumers can run simultaneously
+* Kafka distributes load across partitions
+
+### 6. Real-Time Visualization
+
+* Streamlit enables rapid creation of live dashboards
+* Continuous polling + UI refresh simulates real-time updates
+
+---
+
+## How to Run
+
+### Start Producer
+
+```
+python producer_finance.py config.ini SPY
+```
+
+### Real-Time Mode
+
+```
+python producer_finance.py config.ini SPY --realtime
+```
+
+### Start Consumer Dashboard
+
+```
+streamlit run consumer_finance.py -- config.ini SPY AAPL TSLA
+```
+
+---
+
+## Summary
+
+This lab illustrates how Kafka enables scalable, real-time data pipelines. By combining streaming data with visualization tools, we can build systems that process and display live information efficiently.
+
+
+## Kafka Scaling Experiments
+
+This lab allows experimentation with how Kafka behaves under different configurations of producers and consumers.
+
+---
+
+### 1. Multiple Producers
+
+**Setup:**
+Run multiple producers (same or different tickers)
+
+```
+python producer_finance.py config.ini SPY
+python producer_finance.py config.ini AAPL
+```
+
+**Observation:**
+
+* All producers write to Kafka independently
+* Messages are appended to topics
+* Kafka handles high-throughput ingestion
+
+**Key Insight:**
+Kafka scales horizontally — more producers = higher data input rate
+
+---
+
+### 2. Multiple Consumers (Same Group)
+
+**Setup:**
+Run multiple consumers with the same `group.id`
+
+**Observation:**
+
+* Messages are **distributed across consumers**
+* Each message is processed by **only one consumer in the group**
+* Consumers split partitions automatically
+
+**Key Insight:**
+This enables **parallel processing (load balancing)**
+
+👉 Example:
+
+* 2 consumers in same group
+* Each processes ~50% of messages
+
+---
+
+### 3. Multiple Consumer Groups
+
+**Setup:**
+Run consumers with different `group.id` values
+
+**Observation:**
+
+* Each group receives **all messages independently**
+* Messages are **not shared between groups**
+
+**Key Insight:**
+Kafka supports **fan-out (pub/sub)**
+
+👉 Example:
+
+* Group A → dashboard
+* Group B → data storage
+* Both receive 100% of messages
+
+---
+
+### 4. Combined Behavior
+
+| Configuration       | Result                          |
+| ------------------- | ------------------------------- |
+| Multiple Producers  | Increased input throughput      |
+| Same Consumer Group | Messages split across consumers |
+| Different Groups    | Each group gets full data       |
+
+---
+
+### Final Takeaway
+
+Kafka separates:
+
+* **Data ingestion** (producers)
+* **Data consumption** (consumer groups)
+
+This allows:
+
+* Scalable pipelines
+* Parallel processing
+* Multiple independent applications using the same data
+
+---
+Plain-English takeaway
+More producers → more data
+More consumers (same group) → faster processing
+More groups → more independent pipelines
+
+
+
+## Practical Observations from Testing
+
+### Development vs Real-Time Mode
+
+* **Development mode** sends a large batch of historical data quickly
+* **Real-time mode** sends one message at a time at fixed intervals
+* Both use the same Kafka pipeline, but behave very differently:
+
+  * Dev mode feels like batch processing
+  * Real-time mode behaves like a live data stream
+
+---
+
+### Multiple Consumers (Same Group)
+
+* Running multiple consumers with the same `group.id` splits the data between them
+* Each message is processed by only one consumer in the group
+* This results in **load balancing**
+
+**Observed Behavior:**
+
+* Two dashboards showed different subsets of the data
+* Each consumer processed part of the stream
+
+---
+
+### Multiple Consumer Groups
+
+* Consumers with different `group.id` values each receive all messages
+* This allows multiple independent applications to use the same data
+
+**Observed Behavior:**
+
+* Two dashboards showed identical full datasets
+* Each acted independently of the other
+
+---
+
+### Key Takeaway
+
+Kafka allows you to scale systems in two ways:
+
+* **Horizontally (same group)** → distribute workload
+* **Independently (different groups)** → duplicate data for multiple uses
+
+This separation is a core strength of Kafka’s design.

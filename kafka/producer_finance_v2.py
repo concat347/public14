@@ -1,48 +1,89 @@
 import sys
-import configparser
 import json
-from datetime import datetime
+import time
+import math
+import configparser
 import yfinance as yf
 from confluent_kafka import Producer
 
-
-# Check command line arguments
-if len(sys.argv) != 3:
-    print("Usage: python producer_finance.py <config_file> <ticker>")
+if len(sys.argv) < 3 or len(sys.argv) > 4:
+    print("Usage: python producer_finance.py <config_file> <ticker> [--realtime]")
     sys.exit(1)
 
-config_file, ticker = sys.argv[1], sys.argv[2]
+config_file = sys.argv[1]
+ticker = sys.argv[2]
+realtime = len(sys.argv) == 4 and sys.argv[3] == "--realtime"
 
-# Load Kafka configuration
 conf = configparser.ConfigParser()
 conf.read(config_file)
 
-producer_conf = {
-    "bootstrap.servers": conf["default"]["bootstrap.servers"]
-}
+producer = Producer({"bootstrap.servers": conf["default"]["bootstrap.servers"]})
 
-producer = Producer(producer_conf)
+def delivery_report(err, msg):
+    if err is not None:
+        print(f"Delivery failed: {err}")
+    else:
+        print(f"Produced to {msg.topic()} [{msg.partition()}] at offset {msg.offset()}")
 
-# Retrieve live (or recent) financial data using yfinance
-data = yf.download(ticker, period="1d", interval="1m")
+def safe_float(x):
+    return float(x) if x is not None and not math.isnan(x) else None
 
-print(f"Producing financial data for {ticker}...")
+def row_to_json(row):
+    record = {
+        "open":   safe_float(row["Open"]),
+        "high":   safe_float(row["High"]),
+        "low":    safe_float(row["Low"]),
+        "close":  safe_float(row["Close"]),
+        "volume": safe_float(row["Volume"]),
+    }
+    return json.dumps(record).encode("utf-8")
 
-for timestamp, row in data.iterrows():
-    record_key = str(timestamp)
-    record_value = json.dumps({
-        "open": float(row["Open"].item() if hasattr(row["Open"], "item") else row["Open"]),
-        "high": float(row["High"].item() if hasattr(row["High"], "item") else row["High"]),
-        "low": float(row["Low"].item() if hasattr(row["Low"], "item") else row["Low"]),
-        "close": float(row["Close"].item() if hasattr(row["Close"], "item") else row["Close"]),
-        "volume": int(row["Volume"].item() if hasattr(row["Volume"], "item") else row["Volume"])
-    })
+# ── REAL-TIME MODE ─────────────────────────────────────────
+if realtime:
+    print(f"Real-time mode: producing live quotes for {ticker}. Ctrl+C to stop.")
+    try:
+        while True:
+            data = yf.download(ticker, period="1d", interval="1m", progress=False)
 
-    producer.produce(
-        topic=ticker,
-        key=record_key,
-        value=record_value
-    )
+            if not data.empty:
+                # Fix MultiIndex if present
+                if hasattr(data.columns, "levels"):
+                    data.columns = data.columns.get_level_values(0)
+
+                latest = data.tail(1)
+
+                for timestamp, row in latest.iterrows():
+                    producer.produce(
+                        topic=ticker,
+                        key=str(timestamp).encode("utf-8"),
+                        value=row_to_json(row),
+                        callback=delivery_report
+                    )
+                    producer.poll(0)
+
+            time.sleep(60)
+
+    except KeyboardInterrupt:
+        pass
+
+# ── DEVELOPMENT MODE ──────────────────────────────────────
+else:
+    print(f"Dev mode: producing today's 1-minute history for {ticker}.")
+
+    data = yf.download(ticker, period="1d", interval="1m", progress=False)
+
+    # Fix MultiIndex
+    if hasattr(data.columns, "levels"):
+        data.columns = data.columns.get_level_values(0)
+
+    for timestamp, row in data.iterrows():
+        producer.produce(
+            topic=ticker,
+            key=str(timestamp).encode("utf-8"),
+            value=row_to_json(row),
+            callback=delivery_report
+        )
+        producer.poll(0)
 
 producer.flush()
-print("All messages sent successfully.")
+print("Done.")
