@@ -1,64 +1,85 @@
+#!/usr/bin/env python
+
 import sys
-import configparser
-import json
-import yfinance as yf
+from random import choice
+from argparse import ArgumentParser, FileType
+from configparser import ConfigParser
 from confluent_kafka import Producer
-import math
 
-# Check command line args
-if len(sys.argv) != 3:
-    print("Usage: python producer_finance.py <config_file> <ticker>")
-    sys.exit(1)
+import requests
+import numpy as np
+import pandas as pd
+from datetime import datetime
+from datetime import date
+from datetime import timedelta
+import time
+import yfinance as yf
 
-config_file, ticker = sys.argv[1], sys.argv[2]
+def get_latest_stock_price(stock):
+    data = stock.history()
+    latest_stock_price = data['Close'].iloc[-1]
+    return latest_stock_price
 
-# Load Kafka config
-conf = configparser.ConfigParser()
-conf.read(config_file)
-bootstrap_servers = conf["default"]["bootstrap.servers"]
+def get_today():
+    return date.today()
 
-# Initialize producer
-producer_conf = {"bootstrap.servers": bootstrap_servers}
-producer = Producer(producer_conf)
+def get_next_day_str(today):
+    return get_date_from_string(today) + timedelta(days=1)
 
-# Callback for delivery reports
-def delivery_report(err, msg):
-    if err is not None:
-        print(f"Delivery failed: {err}")
-    else:
-        print(f"Produced to {msg.topic()} [{msg.partition()}] at offset {msg.offset()}")
+def get_date_from_string(expiration_date):
+    return datetime.strptime(expiration_date, "%Y-%m-%d").date()
 
-print(f"Fetching data for {ticker}...")
-data = yf.download(ticker, period="1d", interval="1m")
+def get_string_from_date(expiration_date):
+    return expiration_date.strftime('%Y-%m-%d')
 
-# Fix multi-index columns
-if isinstance(data.columns, tuple) or hasattr(data.columns, "levels"):
-    data.columns = data.columns.get_level_values(0)
+if __name__ == '__main__':
+    # Parse the command line.
+    parser = ArgumentParser()
+    parser.add_argument('config_file', type=FileType('r'))
+    parser.add_argument('ticker', default='QQQ')
+    args = parser.parse_args()
 
-for timestamp, row in data.iterrows():
-    key = str(timestamp)
+    # Parse the configuration.
+    # See https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+    config_parser = ConfigParser()
+    config_parser.read_file(args.config_file)
+    config = dict(config_parser['default'])
 
-    # 🔥 NEW: structured JSON value
-    value_dict = {
-        "open": float(row["Open"]) if not math.isnan(row["Open"]) else None,
-        "high": float(row["High"]) if not math.isnan(row["High"]) else None,
-        "low": float(row["Low"]) if not math.isnan(row["Low"]) else None,
-        "close": float(row["Close"]) if not math.isnan(row["Close"]) else None,
-        "volume": float(row["Volume"]) if not math.isnan(row["Volume"]) else None,
-    }
+    # read the ticker
+    ticker = args.ticker
+    print('ticker', ticker)
 
-    value_json = json.dumps(value_dict)
+    # Create Producer instance
+    producer = Producer(config)
 
-    print(f"{key} -> {value_json}")  # optional debug
+    # Optional per-message delivery callback (triggered by poll() or flush())
+    # when a message has been successfully delivered or permanently
+    # failed delivery (after retries).
+    def delivery_callback(err, msg):
+        if err:
+            print('ERROR: Message failed delivery: {}'.format(err))
+        else:
+            print("Produced event to topic {topic}: key = {key:12} value = {value:12}".format(
+                topic=msg.topic(), key=msg.key().decode('utf-8'), value=msg.value().decode('utf-8')))
 
-    producer.produce(
-        topic=ticker,
-        key=key.encode("utf-8"),
-        value=value_json.encode("utf-8"),
-        callback=delivery_report
-    )
+    count = 0
+    # Produce data by repeatedly fetching today's stock prices - feel free to change
+    while True:
 
-    producer.poll(0.1)
+        # date range
+        sd = get_today()
+        # sd = get_date_from_string('2024-11-11')
+        ed = sd + timedelta(days=1)
+        # download data
+        dfvp = yf.download(tickers=ticker, start=sd, end=ed, interval="1m")
 
-producer.flush()
-print("All messages sent successfully.")
+        topic = ticker
+        for index, row in dfvp.iterrows():
+            print(index, row['Close']) # debug only
+            producer.produce(topic, str(index), str(row['Close']), callback=delivery_callback)
+            count += 1
+            time.sleep(5)
+
+        # Block until the messages are sent.
+        producer.poll(10000)
+        producer.flush()

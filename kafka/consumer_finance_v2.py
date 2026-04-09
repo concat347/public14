@@ -1,98 +1,77 @@
-import sys
+# Consumer V2
 import json
-import time
-import configparser
-from collections import defaultdict
-from confluent_kafka import Consumer, KafkaError, KafkaException
 import streamlit as st
 import pandas as pd
-
-# Usage:
-# streamlit run consumer_finance.py -- <config_file> <ticker1> [ticker2 ...]
-
-if len(sys.argv) < 3:
-    st.error("Usage: streamlit run consumer_finance.py -- <config_file> <ticker1> [ticker2 ...]")
-    st.stop()
-
-config_file = sys.argv[1]
-tickers = sys.argv[2:]
-
-conf = configparser.ConfigParser()
-conf.read(config_file)
-
-# ── Kafka Consumer ────────────────────────────────────────
-@st.cache_resource
-def get_consumer():
-    c = Consumer({
-        "bootstrap.servers": conf["default"]["bootstrap.servers"],
-        "group.id": conf["consumer"]["group.id"],
-        "auto.offset.reset": conf["consumer"]["auto.offset.reset"],
-    })
-    c.subscribe(tickers)
+from argparse import ArgumentParser, FileType
+from configparser import ConfigParser
+from confluent_kafka import Consumer, OFFSET_BEGINNING
+ 
+def parse_args():
+    parser = ArgumentParser()
+    parser.add_argument('config_file', type=FileType('r'))
+    parser.add_argument('tickers', nargs='+', default=['QQQ'])
+    parser.add_argument('--reset', action='store_true')
+    return parser.parse_args()
+ 
+def make_consumer(tickers, reset):
+    config_parser = ConfigParser()
+    config_parser.read('getting_started.ini')
+    config = dict(config_parser['default'])
+    config.update(config_parser['consumer'])
+    c = Consumer(config)
+    def reset_offset(consumer, partitions):
+        if reset:
+            for p in partitions:
+                p.offset = OFFSET_BEGINNING
+            consumer.assign(partitions)
+    c.subscribe(tickers, on_assign=reset_offset)
+    print('Subscribed to topics:', tickers)
     return c
-
-# ── Data Store ────────────────────────────────────────────
-@st.cache_resource
-def get_store():
-    return defaultdict(list)
-
-consumer = get_consumer()
-store = get_store()
-
-# ── Poll messages ─────────────────────────────────────────
-for _ in range(100):  # limit per refresh
-    msg = consumer.poll(0.1)
-
+ 
+args = parse_args()
+ 
+# --- Streamlit UI ---
+st.title('Stock OHLCV Dashboard')
+ 
+# Initialize session state once
+if 'consumer' not in st.session_state:
+    st.session_state.consumer = make_consumer(args.tickers, args.reset)
+    st.session_state.data = {t: pd.DataFrame(columns=['timestamp','open','high','low','close','volume'])
+                             for t in args.tickers}
+ 
+consumer = st.session_state.consumer
+ 
+# Poll a batch of messages
+for _ in range(10):
+    msg = consumer.poll(0.2)
     if msg is None:
-        break
-
-    if msg.error():
-        if msg.error().code() == KafkaError._PARTITION_EOF:
-            continue
-        raise KafkaException(msg.error())
-
-    topic = msg.topic()
-    key = msg.key().decode("utf-8") if msg.key() else None
-
-    try:
-        record = json.loads(msg.value().decode("utf-8"))
-        record["timestamp"] = key
-        store[topic].append(record)
-
-        # Prevent unlimited growth
-        if len(store[topic]) > 1000:
-            store[topic] = store[topic][-1000:]
-
-    except Exception:
         continue
-
-# ── UI ────────────────────────────────────────────────────
-st.title("Kafka Finance Dashboard")
-st.caption(f"Watching: {', '.join(tickers)}")
-
-available = [t for t in tickers if t in store]
-
-if not available:
-    st.info("Waiting for messages...")
+    elif msg.error():
+        print("ERROR:", msg.error())
+    else:
+        try:
+            record = json.loads(msg.value().decode('utf-8'))
+        except json.JSONDecodeError:
+            print("Skipping non-JSON message:", msg.value())
+            continue
+        topic = msg.topic()
+        row = pd.DataFrame([record])
+        row['timestamp'] = pd.to_datetime(row['timestamp'])
+        df = st.session_state.data[topic]
+        df = pd.concat([df, row], ignore_index=True).drop_duplicates('timestamp')
+        st.session_state.data[topic] = df
+ 
+selected = st.selectbox('Ticker', args.tickers)
+df = st.session_state.data[selected]
+ 
+if df.empty:
+    st.write("Waiting for data...")
 else:
-    tabs = st.tabs(available)
-
-    for tab, ticker in zip(tabs, available):
-        with tab:
-            df = pd.DataFrame(store[ticker])
-
-            if df.empty:
-                st.warning("No data yet")
-                continue
-
-            df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
-            df = df.sort_values("timestamp").set_index("timestamp")
-
-            st.subheader(f"{ticker} — {len(df)} records")
-
-            st.line_chart(df[["open", "high", "low", "close"]], height=300)
-            st.bar_chart(df[["volume"]], height=200)
-
-# Auto-refresh
-time.sleep(2)
+    df_plot = df.set_index('timestamp')
+    st.subheader('Open / High / Low / Close')
+    st.line_chart(df_plot[['open', 'high', 'low', 'close']])
+    st.subheader('Volume')
+    st.bar_chart(df_plot[['volume']])
+ 
+# Auto-rerun every 5 seconds
 st.rerun()
