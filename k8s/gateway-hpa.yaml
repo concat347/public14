@@ -1,0 +1,40 @@
+# ---------------------------------------------------------------
+# gateway-hpa.yaml
+# Horizontal Pod Autoscaler for the gateway service.
+# Scales gateway replicas based on CPU utilization.
+# Requires Metrics Server to be running in the cluster (GKE includes this).
+#
+# Thresholds:
+#   - Scale up when average CPU across gateway pods exceeds 50% of request (100m)
+#   - Min 1 replica, Max 5 replicas
+#   - Scale up aggressively (15s window, 2 pods at a time)
+#   - Scale down conservatively (120s window) to avoid thrashing
+#   - Changed avrUtil from 50 to 30% to start scaling sooner
+# ---------------------------------------------------------------
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gateway-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gateway
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50   # scale up when avg CPU > 50% of request (>50m)
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 15   # react quickly — don't wait long under load
+      policies:
+      - type: Pods
+        value: 2                 # add up to 2 pods every 15 seconds
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 120  # wait 2 minutes before scaling down

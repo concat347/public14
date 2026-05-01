@@ -1,0 +1,62 @@
+# ---------------------------------------------------------------
+# dashboard.yaml
+# Plotly Dash frontend. The Ingress provides the public-facing
+# URL. This is the only service exposed to the internet.
+# The gateway, producer, and data service are all ClusterIP
+# (internal only) and reachable only through the dashboard.
+# ---------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard
+  template:
+    metadata:
+      labels:
+        app: dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: us-central1-docker.pkg.dev/sentiment-compare-gke/sentiment-repo/sentiment-compare-dashboard:latest
+          ports:
+            - containerPort: 8050
+          env:
+            - name: GATEWAY_URL
+              value: "http://gateway:8000"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard
+spec:
+  selector:
+    app: dashboard
+  ports:
+    - port: 80
+      targetPort: 8050
+  type: NodePort
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dashboard-ingress
+  annotations:
+    kubernetes.io/ingress.class: "gce"          # GKE's built-in HTTP load balancer
+    kubernetes.io/ingress.allow-http: "true"
+spec:
+  defaultBackend:
+    service:
+      name: dashboard
+      port:
+        number: 80
