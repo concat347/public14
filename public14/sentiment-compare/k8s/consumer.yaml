@@ -1,0 +1,52 @@
+# ---------------------------------------------------------------
+# consumer.yaml
+# Kafka listener that runs FinBERT and writes results to
+# the in-cluster PostgreSQL StatefulSet.
+# No Service needed — nothing calls the consumer, it pulls from Kafka.
+# ---------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consumer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consumer
+  template:
+    metadata:
+      labels:
+        app: consumer
+    spec:
+      containers:
+        - name: consumer
+          image: us-central1-docker.pkg.dev/sentiment-compare-gke/sentiment-repo/sentiment-compare-consumer:latest
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "redpanda:9092"
+            - name: POSTGRES_HOST
+              value: "postgres"
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: sentiment-secrets
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sentiment-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sentiment-secrets
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "3Gi"       # FinBERT model is ~2.9GB
+              cpu: "1000m"

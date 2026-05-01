@@ -1,0 +1,61 @@
+# ---------------------------------------------------------------
+# data.yaml
+# Stateless FastAPI service. Queries PostgreSQL and returns
+# time-series data to the dashboard. Requests changed from 100 to 350 to demonstrate CA scaling
+# ---------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data
+  template:
+    metadata:
+      labels:
+        app: data
+    spec:
+      containers:
+        - name: data
+          image: us-central1-docker.pkg.dev/sentiment-compare-gke/sentiment-repo/sentiment-compare-data:latest
+          ports:
+            - containerPort: 8003
+          env:
+            - name: POSTGRES_HOST
+              value: "postgres"
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: sentiment-secrets
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sentiment-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sentiment-secrets
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data
+spec:
+  selector:
+    app: data
+  ports:
+    - port: 8003
+      targetPort: 8003
+  type: ClusterIP

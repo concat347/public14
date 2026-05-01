@@ -1,0 +1,71 @@
+# ---------------------------------------------------------------
+# gateway.yaml
+# Stateless FastAPI service. Handles JWT authentication and
+# proxies requests to the producer and data service.
+# Also connects to PostgreSQL to persist endpoint metrics. Requests increased from 100 to 500 to demonstrate CA scaling
+# ---------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      containers:
+        - name: gateway
+          image: us-central1-docker.pkg.dev/sentiment-compare-gke/sentiment-repo/sentiment-compare-gateway:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sentiment-secrets
+                  key: JWT_SECRET
+            - name: PRODUCER_URL
+              value: "http://producer:8001"
+            - name: DATA_URL
+              value: "http://data:8003"
+            - name: POSTGRES_HOST
+              value: "postgres"
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: sentiment-secrets
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sentiment-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sentiment-secrets
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  selector:
+    app: gateway
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
