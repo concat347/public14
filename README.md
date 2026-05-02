@@ -1,6 +1,6 @@
 SentimentCompare
-A microservices pipeline that captures financial news, scores it with a locally-running NLP model, and asks a concrete question: does the tone of the news actually predict price movement?
-The pipeline runs two independent sentiment streams against the same price data. Alpha Vantage supplies news and its own pre-computed sentiment scores. Finnhub supplies a separate news feed that passes through an independent quality filter before being scored by a locally-running DistilRoBERTa or RoBERTa-Large model. Both streams are stored alongside daily OHLCV price data from Polygon.io. The dashboard then lets you explore how well — or how poorly — each source forecasts same-day, next-day, and two-day price changes.
+A microservices pipeline that captures financial news, scores it with a locally-running NLP model, and compares the sentiment of the news to price movement.
+The pipeline runs two independent sentiment streams against the same price data. Alpha Vantage (as well as others) supply news and their own pre-computed sentiment scores. Finnhub supplies a separate news feed that passes through an independent quality filter before being scored by a locally-running RoBERTa-Large model. Both streams are stored alongside daily OHLCV price data from Polygon.io. The dashboard then lets you explore how well — or how poorly — each independent source scores sentiment for the same-day, next-day, and two-day price changes.
 
 Architecture
 Browser
@@ -73,12 +73,19 @@ docker compose up -d --no-deps consumer
 Article Quality Filter
 Each article is scored across five components before reaching the sentiment model:
 Component Weight - What It Measures
-Length0.25, Character count — short blurbs score near zero, Substance 0.30 Density of financial terms relative to word count, Structure 0.20 Sentence count — social posts score near zero, Source±0.15 Bonus for Reuters/Bloomberg/WSJ; penalty for Reddit/StockTwits, Noise penalty−0.20 Cashtags, emoji clusters, meme phrases
+Length 0.25, Character count — short blurbs score near zero,
+Substance 0.30 Density of financial terms relative to word count,
+Structure 0.20 Sentence count — social posts score near zero,
+Source±0.15 Bonus for Reuters/Bloomberg/WSJ; penalty for Reddit/StockTwits,
+Noise penalty−0.20 Cashtags, emoji clusters, meme phrases
 The threshold is configurable without rebuilding:
-yaml# docker-compose.yml
 environment:
   - QUALITY_THRESHOLD=0.45
-ThresholdEffect 0.30 Permissive — cuts obvious noise, allows thin wire blurbs 0.35 Default — balanced for mixed news feeds, 0.45 Moderate — requires meaningful financial substance, 0.60 Strict — only well-sourced, substantive articles pass
+ThresholdEffect
+0.30 Permissive — cuts obvious noise, allows thin wire blurbs
+0.35 Default — balanced for mixed news feeds,
+0.45 Moderate — requires meaningful financial substance,
+0.60 Strict — only well-sourced, substantive articles pass
 
 Dashboard
 Fetch data — Enter a ticker (e.g. USO, XLE, SPY) and a history window, then click Fetch Data. The pipeline runs asynchronously.
@@ -89,7 +96,8 @@ Scatter plot — sentiment score vs. next-day price change, with a trend line.
 Correlation matrix — Pearson r for both models across same-day, +1, and +2 day horizons.
 
 Environment Variables
-Variable Used By Description ALPHAVANTAGE_API_KEY producer Alpha Vantage API key POLYGON_API_KEY producer Polygon.io API key KAFKA_BOOTSTRAP_SERVERS producer, consumer Kafka address (default: redpanda:9092) POSTGRES_HOST consumer, data, gateway Postgres host (default: postgres)POSTGRES_DB consumer, data, gateway Database name (default: stockdb)POSTGRES_USER consumer, data, gateway Database user (default: stockuser)POSTGRES_PASSWORD consumer, data, gateway Database password SECRET_KEY gateway Secret key for signing JWT tokens QUALITY_THRESHOLD consumer Article filter threshold, [0.0, 1.0] (default: 0.35)
+Variable Used By Description
+ALPHAVANTAGE_API_KEY producer Alpha Vantage API key POLYGON_API_KEY producer Polygon.io API key KAFKA_BOOTSTRAP_SERVERS producer, consumer Kafka address (default: redpanda:9092) POSTGRES_HOST consumer, data, gateway Postgres host (default: postgres) POSTGRES_DB consumer, data, gateway Database name (default: stockdb) POSTGRES_USER consumer, data, gateway Database user (default: stockuser) POSTGRES_PASSWORD consumer, data, gateway Database password SECRET_KEY gateway Secret key for signing JWT tokens QUALITY_THRESHOLD consumer Article filter threshold, [0.0, 1.0] (default: 0.35)
 
 Notes
 
