@@ -1,39 +1,35 @@
 # SentimentCompare
 
-A microservices pipeline that captures financial news, scores it with a locally-running NLP model, and asks a concrete question: **does the tone of the news actually predict price movement?**
+A microservices pipeline that captures financial news, scores it with a locally-running NLP model, and asks the question: **does the tone of the news actually predict price movement?**
 
-The pipeline runs two independent sentiment streams against the same price data. Alpha Vantage supplies news and its own pre-computed sentiment scores. Finnhub supplies a separate news feed that passes through an independent quality filter before being scored by a locally-running [DistilRoBERTa or RoBERTa-Large](https://huggingface.co) model. Both streams are stored alongside daily OHLCV price data from Polygon.io. The dashboard then lets you explore how well — or how poorly — each source forecasts same-day, next-day, and two-day price changes.
+The pipeline runs two independent sentiment streams against the same price data. Alpha Vantage and others supply news and their own pre-computed sentiment scores. Finnhub supplies a separate news feed that passes through an independent quality filter before being scored by a locally-running [DistilRoBERTa or RoBERTa-Large](https://huggingface.co) model. Both streams are stored alongside daily OHLCV price data from Polygon.io. The dashboard then lets you explore how well — or how poorly — each source forecasts same-day, next-day, and two-day price changes compared to the local model.
 
 ---
 
 ## Architecture
-
-```
 Browser
-  │
-  ▼
+│
+▼
 Dashboard (Dash/Flask :8050)
-  │
-  ▼
+│
+▼
 Gateway (FastAPI :8000)  ←── JWT authentication
-  │
-  ├──► Producer (FastAPI :8001)
-  │         ├── Alpha Vantage API  (news + pre-computed sentiment)
-  │         ├── Finnhub API        (news → quality filter → local model)
-  │         └── Polygon.io API     (daily OHLCV)
-  │                   │
-  │                   ▼
-  │           Redpanda/Kafka (:9092)
-  │                   │
-  │                   ▼
-  │           Consumer (Python)
-  │                 ├── Article Quality Filter
-  │                 ├── DistilRoBERTa / RoBERTa-Large
-  │                 └── PostgreSQL (:5432)
-  │                           │
-  └──► Data Service (FastAPI :8003) ◄──────────┘
-```
-
+│
+├──► Producer (FastAPI :8001)
+│         ├── Alpha Vantage API  (news + pre-computed sentiment)
+│         ├── Finnhub API        (news → quality filter → local model)
+│         └── Polygon.io API     (daily OHLCV)
+│                   │
+│                   ▼
+│           Redpanda/Kafka (:9092)
+│                   │
+│                   ▼
+│           Consumer (Python)
+│                 ├── Article Quality Filter
+│                 ├── DistilRoBERTa / RoBERTa-Large
+│                 └── PostgreSQL (:5432)
+│                           │
+└──► Data Service (FastAPI :8003) ◄──────────┘
 | Service | Port | Description |
 |---------|------|-------------|
 | Gateway | 8000 | Authentication and request routing |
@@ -114,7 +110,7 @@ The consumer supports two models, configured in `services/consumer/main.py`:
 
 | Model | Parameters | Notes |
 |-------|-----------|-------|
-| **DistilRoBERTa** (default) | ~82M | Fast on CPU, financially domain-aware |
+| **DistilRoBERTa** | ~82M | Fast on CPU, financially domain-aware |
 | **RoBERTa-Large** | ~355M | Higher accuracy, slower on CPU; recommended with GPU |
 
 To switch models, comment/uncomment the `SENTIMENT_MODEL_NAME` lines near the top of `main.py`, then rebuild:
