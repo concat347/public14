@@ -2,7 +2,7 @@
 
 A microservices pipeline that captures financial news, and scores it with a locally-running NLP model. 
 
-The pipeline runs two independent sentiment streams against the same price data. Alpha Vantage supplies news and its own pre-computed sentiment scores. Finnhub supplies a separate news feed that passes through an independent quality filter before being scored by a locally-running [DistilRoBERTa or RoBERTa-Large](https://huggingface.co) model. Both streams are stored alongside daily OHLCV price data from Polygon.io.
+The pipeline runs two independent sentiment streams against the same price data. Alpha Vantage supplies news and its own pre-computed sentiment scores. Finnhub supplies a separate news feed that passes through an independent quality filter before being scored by a locally-running [FinBERT](https://huggingface.co) model. Both streams are stored alongside daily OHLCV price data from Polygon.io.
 
 ---
 
