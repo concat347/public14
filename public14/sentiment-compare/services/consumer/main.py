@@ -27,9 +27,6 @@ KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
 KAFKA_TOPIC = "stock-data"
 
 # NYSE/NASDAQ regular session closes at 16:00 ET.
-# ET is UTC-5 in winter (EST) and UTC-4 in summer (EDT).
-# Using UTC-4 (EDT) as the conservative threshold — if it's past
-# 20:00 UTC we are certain the session has closed in either offset.
 MARKET_CLOSE_UTC_HOUR = 20
 
 # ---------------------------------------------------------
@@ -39,17 +36,14 @@ MARKET_CLOSE_UTC_HOUR = 20
 # sentiment model.  Tune this after reviewing a few weeks of filter logs.
 #
 #   0.30  — permissive; cuts obvious social noise but lets through thin
-#            wire-service blurbs.  Good starting point.
+#            wire-service blurbs.
 #   0.45  — moderate; requires meaningful financial substance.
 #   0.60  — strict; only well-sourced, substantive articles pass.
-#
-# The fraction of articles that pass is logged per symbol/date so you can
-# monitor how aggressively this threshold is cutting.
 QUALITY_THRESHOLD = float(os.getenv("QUALITY_THRESHOLD", "0.40"))
 
-# Sources that are inherently noisy and should receive a quality penalty.
+# Sources that are noisy receive a quality penalty.
 # These are matched as substrings (case-insensitive) against the item's
-# `source` field.  Add to this list as you discover low-quality feeds.
+# `source` field.  Add to this list low-quality feeds.
 NOISY_SOURCE_SUBSTRINGS = {
     "reddit", "stocktwits", "twitter", "x.com", "discord",
     "telegram", "benzinga_community", "seekingalpha_comments",
@@ -96,21 +90,18 @@ _FINANCIAL_TERM_RE = re.compile(
 # ---------------------------------------------------------
 # Primary model: DistilRoBERTa fine-tuned on financial news sentences.
 # Fast, financially-domain-aware, and easy on CPU.
-# Swap the comment below to use the larger RoBERTa-Large model if you
-# find accuracy lacking after reviewing a few weeks of data.
 #
 # Option A (default) — DistilRoBERTa, ~82M params, fast on CPU:
 # SENTIMENT_MODEL_NAME = "mrm8488/distilroberta-finetuned-financial-news-sentiment-analysis"
 #
 # Option B — RoBERTa-Large fine-tuned on filings + news, ~355M params,
 # higher accuracy, noticeably slower on CPU, comfortable on GPU:
+#
+# Option C - FinBERT
 SENTIMENT_MODEL_NAME = "soleimanian/financial-roberta-large-sentiment"
 
 # Label order: 0=negative, 1=neutral, 2=positive
 # This ordering is consistent across both model options above.
-# If you swap to a different model, verify its label order from the
-# model card before running — incorrect label mapping silently inverts
-# your scores.
 SENTIMENT_LABEL_ORDER = ["negative", "neutral", "positive"]
 
 print(f"🔧 Loading sentiment model: {SENTIMENT_MODEL_NAME} ...")
@@ -147,8 +138,6 @@ def get_kafka_consumer():
 # TRADING DAY HELPERS
 # ---------------------------------------------------------
 # Known US market holidays (NYSE/NASDAQ) for the current year.
-# Add dates here as needed — the list only needs to cover dates
-# that could appear in the backfill window.
 US_MARKET_HOLIDAYS = {
     date(2026, 1,  1),   # New Year's Day
     date(2026, 1, 19),   # MLK Day
@@ -218,8 +207,7 @@ def score_article_quality(item: dict) -> tuple[float, str]:
     """
     Score a single news item for quality/relevance on a [0.0, 1.0] scale.
     Returns (score, reason) where reason is a short human-readable label
-    that explains the dominant factor.  The reason is used only for debug
-    logging; it is never written to the database.
+    that explains the dominant factor. It is never written to the database.
 
     Scoring components (each clamped so the sum stays in [0, 1]):
 
@@ -394,32 +382,21 @@ def process_daily_sentiment(symbol: str, date_str: str, day_data: dict):
     Stream 1 — OUR MODEL SCORE
         model_sentiment() is called on (headline + summary) for each article.
         Articles are weighted by text length (clamped to [50, 1000] chars),
-        which is a proxy for information density that has no dependency on
-        any Alpha Vantage value.  The AV relevance_score field is intentionally
-        NOT used as a weight here so our score remains independent.
+        which is a proxy for information density.
 
     Stream 2 — ALPHA VANTAGE BASELINE
         AV's pre-computed sentiment scores are averaged with equal weight.
-        AV already applies its own internal relevance weighting before
-        returning a score to us, so re-weighting by relevance here would
-        double-count AV's judgment.  A plain average is the cleanest
-        independent baseline.
 
     After scoring, each article that passes the quality filter is persisted
     to the articles table via write_article().  This powers the live news
-    feed on the dashboard without any additional pipeline steps.
-
-    The delta between the two streams is logged on every run, letting you
-    spot days where the models disagree sharply — which is itself a signal
-    worth watching.
+    feed on the dashboard.
 
     Price data is written if Polygon has a closing bar for this date.
     If not, NULL is written and the backfill step in run_consumer() will
     fill in the price on the next fetch.
 
     article_count written to the DB reflects total articles received;
-    the filter pass-rate is logged here but intentionally not persisted
-    so the schema stays unchanged.
+    the filter pass-rate is logged here.
     """
     all_news_items = day_data.get("news_items", [])
     price_info     = day_data.get("price_data")  # None if market has not closed yet
@@ -442,8 +419,8 @@ def process_daily_sentiment(symbol: str, date_str: str, day_data: dict):
         return
 
     # ------------------------------------------------------------------
-    # Stream 1: Our independent model scores
-    # Weight each article by text length (clamped), not by AV relevance.
+    # Stream 1: independent model scores
+    # Weight each article by text length
     # ------------------------------------------------------------------
     our_weighted_scores = []   # list of (score * weight)
     our_weights         = []   # list of weights (for normalisation)
@@ -467,8 +444,8 @@ def process_daily_sentiment(symbol: str, date_str: str, day_data: dict):
         our_weights.append(text_weight)
         our_confidences.append(conf)
 
-        # XAI: pick the highest-impact article as the day's explanation.
-        # Impact = confidence × weight so we favour both certainty and depth.
+        # XAI: pick the highest-impact article.
+        # Impact = confidence × weight.
         impact = conf * text_weight
         if impact > max_impact:
             max_impact = impact
@@ -476,13 +453,8 @@ def process_daily_sentiment(symbol: str, date_str: str, day_data: dict):
             best_explanation = f"{prefix}: {headline[:60]}..."
 
         # ------------------------------------------------------------------
-        # Persist this scored article to the articles table.
-        # published_at is reconstructed from the date string; Alpha Vantage
-        # does not give us a precise per-article timestamp in the Kafka
-        # message, so we use midnight UTC on the article date as a
-        # consistent sentinel.  The dashboard sorts by published_at DESC
-        # so within-day ordering will be by insertion order, which matches
-        # the order AV returns articles (newest first).
+        # The dashboard sorts by published_at DESC
+        # 
         # ------------------------------------------------------------------
         try:
             published_at = datetime.strptime(date_str, "%Y-%m-%d").replace(
@@ -505,7 +477,7 @@ def process_daily_sentiment(symbol: str, date_str: str, day_data: dict):
 
     # ------------------------------------------------------------------
     # Stream 2: Alpha Vantage baseline — plain equal-weight average.
-    # AV already weighs internally; we just average what it returns.
+    # AV already weighs internally;
     # ------------------------------------------------------------------
     av_raw = [
         item["av_sentiment_score"]
@@ -547,8 +519,7 @@ def process_daily_sentiment(symbol: str, date_str: str, day_data: dict):
         f"{best_explanation}"
     )
 
-    # article_count = n_total (total received), not n_kept, so historical
-    # records stay comparable even if the threshold is later adjusted.
+    # article_count = n_total (total received), not n_kept.
     write_daily_record(
         symbol=symbol,
         date=date_str,
@@ -583,8 +554,7 @@ def run_consumer():
             for sym, dates in buffer.items():
 
                 # --------------------------------------------------
-                # STEP 1: Run model on dates that have news and are
-                # not already fully complete in the database.
+                # STEP 1: Run model on dates that have news
                 # --------------------------------------------------
                 existing_dates = get_existing_dates(sym)
                 new_dates = {
@@ -604,15 +574,6 @@ def run_consumer():
                 # STEP 2: Backfill price for dates that already have
                 # sentiment but were missing price data (market was
                 # still open when they were first written).
-                #
-                # Before retrying Polygon, check whether the date is
-                # actually a trading day and whether the session has
-                # already closed. Three cases are skipped cleanly:
-                #
-                #   weekend  — Sat/Sun, no bar will ever exist.
-                #   holiday  — US market holiday, no bar ever.
-                #   open     — Today's session hasn't closed yet;
-                #              wait until after 20:00 UTC.
                 # --------------------------------------------------
                 incomplete_dates = get_incomplete_dates(sym)
                 if incomplete_dates:
