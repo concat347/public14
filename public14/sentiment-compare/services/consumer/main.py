@@ -35,10 +35,9 @@ MARKET_CLOSE_UTC_HOUR = 20
 # Minimum quality score [0.0, 1.0] for an article to be passed to the
 # sentiment model.  Tune this after reviewing a few weeks of filter logs.
 #
-#   0.30  — permissive; cuts obvious social noise but lets through thin
-#            wire-service blurbs.
-#   0.45  — moderate; requires meaningful financial substance.
-#   0.60  — strict; only well-sourced, substantive articles pass.
+#   0.30  — permissive;
+#   0.45  — moderate;
+#   0.60  — strict;
 QUALITY_THRESHOLD = float(os.getenv("QUALITY_THRESHOLD", "0.40"))
 
 # Sources that are noisy receive a quality penalty.
@@ -56,8 +55,7 @@ QUALITY_SOURCE_SUBSTRINGS = {
     "apnews", "cnbc", "marketwatch", "barron", "sec.gov",
 }
 
-# Regex for social-media noise signals: cashtags, rocket emoji clusters,
-# meme phrases, and all-caps short bursts.
+# Regex for social-media noise signals
 _SOCIAL_NOISE_RE = re.compile(
     r"(\$[A-Z]{1,5}\b"               # $TICKER cashtag
     r"|\U0001F680{2,}"                # two or more 🚀
@@ -384,7 +382,7 @@ def process_daily_sentiment(symbol: str, date_str: str, day_data: dict):
         Articles are weighted by text length (clamped to [50, 1000] chars),
         which is a proxy for information density.
 
-    Stream 2 — ALPHA VANTAGE BASELINE
+    Stream 2 — BASELINE
         AV's pre-computed sentiment scores are averaged with equal weight.
 
     After scoring, each article that passes the quality filter is persisted
@@ -476,8 +474,8 @@ def process_daily_sentiment(symbol: str, date_str: str, day_data: dict):
         )
 
     # ------------------------------------------------------------------
-    # Stream 2: Alpha Vantage baseline — plain equal-weight average.
-    # AV already weighs internally;
+    # Stream 2: baseline — plain equal-weight average.
+    # Already weighs internally;
     # ------------------------------------------------------------------
     av_raw = [
         item["av_sentiment_score"]
