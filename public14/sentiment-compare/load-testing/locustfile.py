@@ -3,32 +3,13 @@ Sentiment Compare — Load Test
 ==============================
 Tests the Gateway → Data Service → PostgreSQL path only.
 Does NOT trigger the producer or touch any external APIs.
-
-Pre-requisite:
-  Run one manual fetch first to populate PostgreSQL with data, e.g.:
-    curl -X POST http://<YOUR_GCP_IP>/api/fetch \
-         -H "Authorization: Bearer <token>" \
-         -H "Content-Type: application/json" \
-         -d '{"symbols": ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA"], "days": 7}'
-
-Install:
-  pip install locust
-
-Run:
-  locust -f locustfile.py --host=http://<YOUR_GCP_IP>
-  Then open http://localhost:8089 in your browser.
-
-Suggested test runs:
-  Run 1 (baseline):  1 replica  each for gateway + data — 25 users, ramp 5/sec
-  Run 2 (scaled):    3 replicas each for gateway + data — 25 users, ramp 5/sec
-  Compare the latency charts and CSV exports for your performance report.
 """
 
 from locust import HttpUser, task, between, events
 import logging
 import random
 
-# ── symbols that were pre-populated by your manual fetch ──────────────────────
+# ── symbols that were pre-populated by manual fetch ──────────────────────
 SYMBOLS = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA"]
 
 logger = logging.getLogger(__name__)
@@ -45,8 +26,7 @@ class SentimentCompareUser(HttpUser):
     no external API calls (Alpha Vantage, Polygon.io) are made.
     """
 
-    # Each simulated user waits 1–3 seconds between tasks,
-    # mimicking a real user clicking around the dashboard.
+    # Each simulated user waits 1–3 seconds between tasks
     wait_time = between(1, 3)
 
     def on_start(self):
