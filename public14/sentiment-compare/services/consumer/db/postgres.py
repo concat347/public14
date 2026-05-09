@@ -64,7 +64,7 @@ def release_conn(conn):
 
 
 # ---------------------------------------------------------
-# WRITE DAILY RECORD (UPSERT) — FINBERT + ALPHA VANTAGE
+# WRITE DAILY RECORD (UPSERT) — FINBERT
 # ---------------------------------------------------------
 def write_daily_record(
     symbol,
