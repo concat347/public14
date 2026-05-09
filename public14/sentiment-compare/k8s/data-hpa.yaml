@@ -2,14 +2,13 @@
 # data-hpa.yaml
 # Horizontal Pod Autoscaler for the data service.
 # Scales data replicas based on CPU utilization.
-# Requires Metrics Server to be running in the cluster (GKE includes this).
 #
 # Thresholds:
 #   - Scale up when average CPU across data pods exceeds 50% of request (100m)
 #   - Min 1 replica, Max 5 replicas
 #   - Scale up aggressively (15s window, 2 pods at a time)
 #   - Scale down conservatively (120s window) to avoid thrashing
-#   - Changed avrUtil from 50 to 30% to start scaling sooner
+#   - Changed avrUtil to start scaling sooner
 # ---------------------------------------------------------------
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
