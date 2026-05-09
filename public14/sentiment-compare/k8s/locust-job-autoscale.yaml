@@ -8,13 +8,6 @@
 #       HPA triggers (~15-30s) + CA provisions node (~2-4 min)
 #       + pods schedule + load stabilises + scale-down observed
 #   - spawn-rate: 5 users/s (slower ramp than baseline 10/s)
-#       gives you more time to watch each stage of scaling unfold
-#
-# Recommended terminal setup while this job runs:
-#   Terminal 1: kubectl get pods -w
-#   Terminal 2: kubectl get hpa -w
-#   Terminal 3: kubectl get nodes -w
-#   Terminal 4: kubectl logs -f job/locust-autoscale
 # ---------------------------------------------------------------
 apiVersion: batch/v1
 kind: Job
