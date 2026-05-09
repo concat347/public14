@@ -1,8 +1,5 @@
 # ---------------------------------------------------------------
 # consumer.yaml
-# Kafka listener that runs FinBERT and writes results to
-# the in-cluster PostgreSQL StatefulSet.
-# No Service needed — nothing calls the consumer, it pulls from Kafka.
 # ---------------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
