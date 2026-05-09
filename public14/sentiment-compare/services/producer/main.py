@@ -76,7 +76,7 @@ class FetchRequest(BaseModel):
     days: int = 7
  
 # ---------------------------------------------------------
-# ALPHA VANTAGE NEWS FETCH
+# NEWS FETCH
 # ---------------------------------------------------------
 def fetch_alpha_vantage_news(symbol: str, from_str: str, to_str: str):
     time_from = datetime.strptime(from_str, "%Y-%m-%d").strftime("%Y%m%dT0000")
@@ -133,7 +133,7 @@ def fetch_alpha_vantage_news(symbol: str, from_str: str, to_str: str):
         return []
  
 # ---------------------------------------------------------
-# POLYGON PRICE FETCH
+# PRICE FETCH
 # ---------------------------------------------------------
 def fetch_polygon_prices(symbol: str, from_str: str, to_str: str):
     try:
@@ -267,7 +267,7 @@ async def fetch_stock_data(request: FetchRequest):
             messages_sent += 1
  
         # -----------------------------
-        # POLYGON.IO PRICE DATA
+        # PRICE DATA
         # -----------------------------
         prices = fetch_polygon_prices(symbol, from_str, to_str)
  
