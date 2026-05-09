@@ -17,7 +17,6 @@ GATEWAY_API = "http://gateway:8000/api"
 
 # ─────────────────────────────────────────────
 # Display labels
-# DB column names (finbert_*) are never shown to the user.
 # ─────────────────────────────────────────────
 LABEL_LOCAL = "Local Model"
 LABEL_AV    = "Alpha Vantage"
@@ -1223,8 +1222,6 @@ def update_charts(_, symbol):
 
 # ── Scatter chart — lives in Analysis tab ──
 # 3-panel layout built with explicit domain-based axes (no make_subplots)
-# to avoid trace-routing ambiguity. Each panel shares the same X scale
-# (-1..1 sentiment) but has its own Y axis (price Δ% for each lag).
 @app.callback(
     Output("scatter-chart", "figure"),
     Input("load-btn",       "n_clicks"),
